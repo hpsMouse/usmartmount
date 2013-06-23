@@ -1,0 +1,74 @@
+#!/bin/sh
+
+# Install this to /etc/udev/scripts
+
+LOG_FILE="/var/log/usmartmount"
+exec >> "$LOG_FILE" 2>&1
+
+date
+
+mount_name="${ID_FS_LABEL:-$ID_FS_UUID}"
+mount_point="/media/$mount_name"
+
+OPTION_UMASK=0000
+OPTION_FMASK=0111
+OPTION_DMASK=0000
+
+pmount_action() {
+  case "$ACTION" in
+  add)
+    pmount --umask "$OPTION_UMASK" --fmask "$OPTION_FMASK" --dmask "$OPTION_DMASK" -t "$ID_FS_TYPE" "$DEVNAME" "$mount_name"
+  ;;
+  remove)
+    pumount "$DEVNAME"
+  ;;
+  esac
+}
+
+make_mount_point() {
+  mkdir -p "$mount_point"
+}
+
+remove_mount_point() {
+  rmdir "$mount_point"
+}
+
+custom_action() {
+  case "$ACTION" in
+  add)
+    make_mount_point &&
+    "$ID_FS_TYPE""_mount"
+  ;;
+  remove)
+    "$ID_FS_TYPE""_umount"
+    remove_mount_point
+  ;;
+  esac
+}
+
+exfat_mount() {
+  mount.exfat -o umask="$OPTION_UMASK",dmask="$OPTION_DMASK",fmask="$OPTION_FMASK" "$DEVNAME" "$mount_point"
+}
+
+exfat_umount() {
+  fusermount -u "$mount_point"
+}
+
+vfat_mount() {
+  mount -t vfat -o umask="$OPTION_UMASK",dmask="$OPTION_DMASK",fmask="$OPTION_FMASK" "$DEVNAME" "$mount_point"
+}
+
+vfat_umount() {
+  umount "$DEVNAME"
+}
+
+echo "$ID_FS_TYPE" on "$DEVNAME"
+
+case "$ID_FS_TYPE" in
+exfat|vfat)
+  custom_action
+;;
+*)
+  pmount_action
+;;
+esac
